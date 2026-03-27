@@ -369,6 +369,7 @@ export default function GroupDetail() {
   const userShare = userShareKey !== undefined ? Number(costPerUser[userShareKey]) : defaultShare;
 
   const disablePayment = isPaying || userShare <= 0 || paymentStatus.has_paid_in_cycle || paymentStatus.is_fully_funded;
+  const canStartNewRound = isHost && (paymentStatus.is_fully_funded || progressPercent >= 100);
   const paymentLabel = paymentStatus.has_paid_in_cycle
     ? 'Already Paid'
     : paymentStatus.is_fully_funded
@@ -523,11 +524,19 @@ export default function GroupDetail() {
               {isHost && (
                 <button
                   onClick={handleReopenRound}
-                  disabled={isReopeningRound}
-                  className="w-full mt-3 py-2 rounded-lg font-semibold text-sm flex items-center justify-center transition-all bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 disabled:opacity-60"
+                  disabled={isReopeningRound || !canStartNewRound}
+                  className={`w-full mt-3 py-2 rounded-lg font-semibold text-sm flex items-center justify-center transition-all border ${
+                    canStartNewRound
+                      ? 'bg-gray-100 text-gray-700 hover:bg-gray-200 border-gray-200'
+                      : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  } disabled:opacity-60`}
                 >
                   <RotateCcw className="w-4 h-4 mr-2" />
-                  {isReopeningRound ? 'Starting New Round...' : 'Start New Payment Round'}
+                  {isReopeningRound
+                    ? 'Starting New Round...'
+                    : canStartNewRound
+                      ? 'Start New Payment Round'
+                      : 'Available at 100% Funding'}
                 </button>
               )}
             </div>

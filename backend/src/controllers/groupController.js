@@ -292,13 +292,19 @@ export const reopenPaymentRound = async (req, res) => {
     await client.query('BEGIN');
 
     const hostCheck = await client.query(
-      'SELECT id, meter_number FROM meter_groups WHERE id = $1 AND host_id = $2',
+      'SELECT id, meter_number, current_balance, target_amount FROM meter_groups WHERE id = $1 AND host_id = $2',
       [id, userId]
     );
 
     if (hostCheck.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(403).json({ error: 'Only the group host can reopen a payment round.' });
+    }
+
+    const group = hostCheck.rows[0];
+    if (Number(group.current_balance) < Number(group.target_amount)) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'New payment round can only start when meter is fully funded.' });
     }
 
     const updated = await client.query(

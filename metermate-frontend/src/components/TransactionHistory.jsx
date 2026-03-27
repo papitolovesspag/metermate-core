@@ -1,8 +1,6 @@
-// src/components/TransactionHistory.jsx
 import { useEffect, useState } from 'react';
 import { ArrowUpRight, ArrowDownLeft, Clock } from 'lucide-react';
 import api from '../services/api';
-import toast from 'react-hot-toast';
 
 export default function TransactionHistory({ groupId }) {
   const [transactions, setTransactions] = useState([]);
@@ -17,9 +15,8 @@ export default function TransactionHistory({ groupId }) {
       setLoading(true);
       const response = await api.get(`/payments/history/${groupId}`);
       setTransactions(response.data.transactions || []);
-    } catch (error) {
-      console.error('Error fetching transactions:', error);
-      // Don't show error toast for non-existent endpoint during transition
+    } catch {
+      setTransactions([]);
     } finally {
       setLoading(false);
     }
@@ -42,15 +39,13 @@ export default function TransactionHistory({ groupId }) {
     }
   };
 
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return new Intl.DateTimeFormat('en-NG', {
+  const formatDate = (dateString) =>
+    new Intl.DateTimeFormat('en-NG', {
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
-    }).format(date);
-  };
+    }).format(new Date(dateString));
 
   if (loading) {
     return (
@@ -90,14 +85,12 @@ export default function TransactionHistory({ groupId }) {
                   {transaction.payment_type === 'session_payment' ? 'Payment' : 'Settlement'}
                 </span>
               </p>
-              <p className="text-xs text-gray-500 mt-1">
-                {formatDate(transaction.created_at)}
-              </p>
+              <p className="text-xs text-gray-500 mt-1">{formatDate(transaction.created_at)}</p>
             </div>
           </div>
 
           <div className="text-right">
-            <p className="font-bold text-gray-900">₦{parseFloat(transaction.amount).toLocaleString()}</p>
+            <p className="font-bold text-gray-900">NGN {Number(transaction.amount).toLocaleString()}</p>
             <span className={`inline-block text-xs font-semibold px-2 py-1 rounded mt-1 ${getStatusBadge(transaction.status)}`}>
               {transaction.status}
             </span>

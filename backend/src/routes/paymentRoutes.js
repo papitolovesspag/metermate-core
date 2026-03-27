@@ -1,18 +1,25 @@
 // src/routes/paymentRoutes.js
 import express from 'express';
-import { initializePayment, verifyPayment } from '../controllers/paymentController.js';
+import {
+  initializePayment,
+  verifyPayment,
+  purchaseElectricity,
+  getPaymentStatusForUser
+} from '../controllers/paymentController.js';
 import { getTransactionHistory } from '../controllers/transactionController.js';
 import { requireAuth } from '../middlewares/authMid.js';
 
 const router = express.Router();
 
-// Initialize a payment session
+// --- INWARD FUNDING (Webpay) ---
 router.post('/initialize', requireAuth, initializePayment);
-
-// Verify payment after Interswitch completes
 router.post('/verify', requireAuth, verifyPayment);
+router.get('/status/:group_id', requireAuth, getPaymentStatusForUser);
 
-// Get transaction history for a group
+// --- OUTWARD SPENDING (VAS API) ---
+router.post('/purchase-electricity', requireAuth, purchaseElectricity);
+
+// --- HISTORY ---
 router.get('/history/:group_id', requireAuth, getTransactionHistory);
 
 export default router;

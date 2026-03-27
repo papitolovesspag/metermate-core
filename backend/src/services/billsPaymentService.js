@@ -1,246 +1,233 @@
-// backend/src/services/billsPaymentService.js
 import axios from 'axios';
 import { getInterswitchHeaders } from '../utils/interswitchAuth.js';
 
-const MARKETPLACE_API = process.env.INTERSWITCH_MARKETPLACE_API || 'https://api-marketplace-routing.k8.isw.la/marketplace-routing/api/v1/vas';
+const QUICKTELLER_API =
+  process.env.INTERSWITCH_QUICKTELLER_API || 'https://qa.interswitchng.com/quicktellerservice/api/v5';
+const COLLECTIONS_API =
+  process.env.INTERSWITCH_COLLECTIONS_API || 'https://qa.interswitchng.com/collections/api/v1';
+const DEFAULT_ELECTRICITY_PAYMENT_CODE = process.env.INTERSWITCH_ELECTRICITY_PAYMENT_CODE || '10902';
+const DEFAULT_TIMEOUT = 15000;
 
-/**
- * Get list of all supported billers
- * This returns payment codes for each biller (like "10902" for electricity)
- */
+const requestWithFallback = async ({ method, attempts }) => {
+  let lastError = null;
+
+  for (const attempt of attempts) {
+    try {
+      if (method === 'GET') {
+        const response = await axios.get(attempt.url, {
+          headers: attempt.headers,
+          timeout: attempt.timeout || DEFAULT_TIMEOUT
+        });
+        return response.data;
+      }
+
+      const response = await axios.post(attempt.url, attempt.payload, {
+        headers: attempt.headers,
+        timeout: attempt.timeout || DEFAULT_TIMEOUT
+      });
+      return response.data;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError) throw lastError;
+  throw new Error('Interswitch request failed');
+};
+
 export const getAvailableBillers = async () => {
   try {
-    console.log('📡 Fetching available billers...');
-
     const headers = await getInterswitchHeaders();
-
-    const response = await axios.get(`${MARKETPLACE_API}/billers`, {
-      headers,
-      timeout: 15000
+    const data = await requestWithFallback({
+      method: 'GET',
+      attempts: [{ url: `${QUICKTELLER_API}/services`, headers }]
     });
 
-    console.log(`✅ Retrieved ${response.data?.length || 0} billers`);
-
-    // Filter for electricity billers
-    const electricityBillers = response.data?.filter(b =>
-      b.billerName?.toLowerCase().includes('electric') ||
-      b.billerName?.toLowerCase().includes('power') ||
-      b.billerName?.toLowerCase().includes('electricity')
-    ) || [];
+    const billers = Array.isArray(data) ? data : [];
+    const electricityBillers = billers.filter((biller) =>
+      /electric|power|electricity/i.test(biller?.billerName || '')
+    );
 
     return {
       success: true,
-      allBillers: response.data,
-      electricityBillers,
-      data: response.data
+      allBillers: billers,
+      electricityBillers
     };
   } catch (error) {
-    console.error('❌ Failed to fetch billers:', error.message);
     return {
       success: false,
-      error: error.message,
-      data: []
+      error: error.response?.data?.message || error.message,
+      allBillers: [],
+      electricityBillers: []
     };
   }
 };
 
-/**
- * Validate customer (meter number) exists in the grid
- */
 export const validateCustomer = async (customerId, paymentCode) => {
   try {
-    console.log(`🔍 Validating customer ${customerId} with code ${paymentCode}`);
-
     const headers = await getInterswitchHeaders();
+    const payloads = [
+      [{ customerId, paymentCode }],
+      { customerId, paymentCode },
+      [{ customerId: String(customerId), paymentCode: String(paymentCode) }]
+    ];
 
-    const response = await axios.post(
-      `${MARKETPLACE_API}/validate-customer`,
-      [
-        {
-          customerId,
-          paymentCode
-        }
-      ],
-      {
-        headers,
-        timeout: 15000
+    const baseAttempts = [
+      `${QUICKTELLER_API}/Transactions/validations`,
+      `${QUICKTELLER_API}/validate-customer`,
+      `${QUICKTELLER_API}/transactions/validations`
+    ];
+
+    const attempts = [];
+    for (const url of baseAttempts) {
+      for (const payload of payloads) {
+        attempts.push({ url, payload, headers });
       }
-    );
+    }
 
-    console.log(`✅ Customer validated: ${customerId}`);
+    const data = await requestWithFallback({ method: 'POST', attempts });
+    const result = Array.isArray(data) ? data[0] : data;
+    const customerName =
+      result?.customerName || result?.fullName || result?.Customers?.[0]?.fullName || result?.Customers?.[0]?.customerName;
 
-    // Response format: Array with validation results
-    const result = response.data?.[0];
-
-    if (result?.customerName) {
-      return {
-        success: true,
-        customerName: result.customerName,
-        customerId: result.customerId,
-        minimumAmount: result.minimumAmount,
-        maximumAmount: result.maximumAmount,
-        data: result
-      };
-    } else {
+    if (!customerName) {
       return {
         success: false,
-        error: 'Customer validation failed - meter not found in grid',
+        error: 'Customer validation failed - meter not found in grid.',
         data: result
       };
-    }
-  } catch (error) {
-    console.error('❌ Customer validation error:', error.message);
-    if (error.response?.data) {
-      console.error('Response:', error.response.data);
     }
 
     return {
+      success: true,
+      customerName,
+      data: result
+    };
+  } catch (error) {
+    return {
       success: false,
-      error: error.response?.data?.message || error.message,
-      data: error.response?.data
+      error: error.response?.data?.message || error.response?.data?.error || error.message
     };
   }
 };
 
-/**
- * Make payment for bills
- */
 export const makePayment = async (customerId, amount, reference, paymentCode) => {
   try {
-    console.log(`💳 Processing payment for ${customerId} - Amount: ${amount}, Ref: ${reference}`);
-
     const headers = await getInterswitchHeaders();
-
-    const response = await axios.post(
-      `${MARKETPLACE_API}/pay`,
+    const payloads = [
       {
-        customerId: customerId.toString(),
-        amount: parseFloat(amount),
-        reference: reference.toString(),
-        paymentCode: paymentCode.toString()
+        customerId: String(customerId),
+        amount: Number(amount),
+        requestReference: String(reference),
+        paymentCode: String(paymentCode)
       },
       {
-        headers,
-        timeout: 15000
+        customerId: String(customerId),
+        amount: Number(amount),
+        reference: String(reference),
+        paymentCode: String(paymentCode)
       }
-    );
+    ];
 
-    console.log(`✅ Payment processed: ${reference}`);
+    const endpoints = [`${QUICKTELLER_API}/Transactions/payments`, `${QUICKTELLER_API}/pay`];
+    const attempts = [];
 
-    if (response.data?.transactionReference || response.status === 200) {
-      return {
-        success: true,
-        transactionRef: response.data?.transactionReference || reference,
-        status: response.data?.status || 'Successful',
-        amount,
-        customerId,
-        data: response.data
-      };
-    } else {
-      return {
-        success: false,
-        error: response.data?.message || 'Payment failed',
-        data: response.data
-      };
+    for (const url of endpoints) {
+      for (const payload of payloads) {
+        attempts.push({ url, payload, headers });
+      }
     }
-  } catch (error) {
-    console.error('❌ Payment error:', error.message);
-    if (error.response?.data) {
-      console.error('Response:', error.response.data);
-    }
+
+    const data = await requestWithFallback({ method: 'POST', attempts });
+
+    const responseCode = data?.responseCode || data?.ResponseCode;
+    const success = responseCode === '00' || responseCode === 0 || !!data?.transactionReference || !!data?.requestReference;
 
     return {
+      success,
+      transactionRef: data?.transactionReference || data?.requestReference || reference,
+      status: success ? 'Successful' : 'Failed',
+      data,
+      error: success ? null : data?.responseDescription || data?.message || 'Payment failed'
+    };
+  } catch (error) {
+    return {
       success: false,
-      error: error.response?.data?.message || error.message,
       transactionRef: reference,
+      error: error.response?.data?.message || error.response?.data?.error || error.message,
       data: error.response?.data
     };
   }
 };
 
-/**
- * Check payment transaction status
- */
 export const checkTransactionStatus = async (requestReference) => {
+  const merchantCode = process.env.INTERSWITCH_MERCHANT_CODE;
+
   try {
-    console.log(`🔍 Checking transaction status: ${requestReference}`);
-
     const headers = await getInterswitchHeaders();
+    const attempts = [];
 
-    const response = await axios.get(
-      `${MARKETPLACE_API}/transactions?request-reference=${requestReference}`,
-      {
-        headers,
-        timeout: 15000
-      }
-    );
-
-    console.log(`✅ Transaction status retrieved: ${requestReference}`);
-
-    const transaction = response.data?.[0] || response.data;
-
-    // Map status to our system
-    let status = 'Pending';
-    if (transaction?.status?.toLowerCase() === 'successful' || transaction?.responseCode === '00') {
-      status = 'Successful';
-    } else if (transaction?.status?.toLowerCase() === 'failed') {
-      status = 'Failed';
+    if (merchantCode) {
+      attempts.push({
+        url: `${COLLECTIONS_API}/gettransaction.json?merchantcode=${merchantCode}&transactionreference=${requestReference}`,
+        headers
+      });
     }
 
+    attempts.push({
+      url: `${QUICKTELLER_API}/transactions?request-reference=${requestReference}`,
+      headers
+    });
+
+    const data = await requestWithFallback({ method: 'GET', attempts });
+    const raw = Array.isArray(data) ? data[0] : data;
+    const responseCode = String(raw?.responseCode ?? raw?.ResponseCode ?? '').trim();
+    const statusText = String(raw?.status || raw?.ResponseDescription || '').toLowerCase();
+
+    const isSuccessful =
+      responseCode === '00' ||
+      statusText.includes('successful') ||
+      statusText.includes('approved');
+
     return {
-      success: status === 'Successful',
-      status,
+      success: isSuccessful,
+      status: isSuccessful ? 'Successful' : 'Pending',
       transactionRef: requestReference,
-      amount: transaction?.amount,
-      data: transaction
+      amount: raw?.amount,
+      data: raw
     };
   } catch (error) {
-    console.error('❌ Transaction check error:', error.message);
-
     return {
       success: false,
       status: 'Error',
-      error: error.message,
-      transactionRef: requestReference,
-      data: null
+      error: error.response?.data?.message || error.message,
+      transactionRef: requestReference
     };
   }
 };
 
-/**
- * Get payment code for electricity
- * Automatically fetches from list and returns the appropriate code
- */
 export const getElectricityPaymentCode = async () => {
-  try {
-    const billers = await getAvailableBillers();
-
-    if (billers.electricityBillers?.length > 0) {
-      // Get the first electricity biller's payment code
-      const electricityBiller = billers.electricityBillers[0];
-      console.log(`⚡ Using electricity biller: ${electricityBiller.billerName} (${electricityBiller.paymentCode})`);
-
-      return {
-        success: true,
-        paymentCode: electricityBiller.paymentCode,
-        billerName: electricityBiller.billerName
-      };
-    } else {
-      // Fallback to common payment codes for electricity
-      console.warn('⚠️ No electricity billers found, using fallback code');
-      return {
-        success: true,
-        paymentCode: '10902', // Common electricity payment code
-        billerName: 'Electricity (Fallback)',
-        warning: 'Using fallback payment code'
-      };
-    }
-  } catch (error) {
-    console.error('Error getting electricity payment code:', error.message);
+  if (process.env.INTERSWITCH_ELECTRICITY_PAYMENT_CODE) {
     return {
-      success: false,
-      error: error.message,
-      paymentCode: '10902' // Fallback
+      success: true,
+      paymentCode: process.env.INTERSWITCH_ELECTRICITY_PAYMENT_CODE,
+      billerName: 'Configured Electricity Biller'
     };
   }
+
+  const billers = await getAvailableBillers();
+  if (billers.success && billers.electricityBillers.length > 0) {
+    const electricityBiller = billers.electricityBillers[0];
+    return {
+      success: true,
+      paymentCode: electricityBiller.paymentCode,
+      billerName: electricityBiller.billerName
+    };
+  }
+
+  return {
+    success: true,
+    paymentCode: DEFAULT_ELECTRICITY_PAYMENT_CODE,
+    billerName: 'Electricity (Fallback)'
+  };
 };

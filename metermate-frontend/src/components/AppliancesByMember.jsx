@@ -1,4 +1,3 @@
-// src/components/AppliancesByMember.jsx
 import { useState } from 'react';
 import { ChevronDown, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -25,7 +24,7 @@ export default function AppliancesByMember({ appliances, members, userId, onAppl
       toast.success('Device deleted');
       setShowDeleteModal(false);
       setSelectedAppliance(null);
-      onApplianceDelete();
+      onApplianceDelete?.();
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to delete device');
     } finally {
@@ -33,18 +32,15 @@ export default function AppliancesByMember({ appliances, members, userId, onAppl
     }
   };
 
-  // Group appliances by owner
   const appliancesByOwner = members.reduce((acc, member) => {
-    const memberAppliances = appliances.filter(app => app.user_id === member.id);
-    const totalKwh = memberAppliances.reduce((sum, app) => {
-      return sum + ((app.wattage / 1000) * app.daily_hours);
-    }, 0);
+    const memberAppliances = appliances.filter((app) => String(app.user_id) === String(member.id));
+    const totalKwh = memberAppliances.reduce((sum, app) => sum + (app.wattage / 1000) * app.daily_hours, 0);
 
     acc[member.id] = {
       name: member.name,
       appliances: memberAppliances,
       totalKwh: totalKwh.toFixed(2),
-      isCurrentUser: member.id === userId
+      isCurrentUser: String(member.id) === String(userId)
     };
     return acc;
   }, {});
@@ -56,19 +52,13 @@ export default function AppliancesByMember({ appliances, members, userId, onAppl
         const isExpanded = expandedMember === member.id;
 
         return (
-          <div
-            key={member.id}
-            className="border border-gray-200 rounded-lg overflow-hidden hover:border-blue-300 transition-all duration-200"
-          >
-            {/* Header (Clickable) */}
+          <div key={member.id} className="border border-gray-200 rounded-lg overflow-hidden hover:border-blue-300 transition-all duration-200">
             <button
               onClick={() => setExpandedMember(isExpanded ? null : member.id)}
               className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors"
             >
               <div className="flex items-center space-x-3 flex-1 text-left">
-                <ChevronDown
-                  className={`w-5 h-5 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-                />
+                <ChevronDown className={`w-5 h-5 text-gray-600 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                 <div>
                   <p className="font-semibold text-gray-900">
                     {data.name}
@@ -79,12 +69,9 @@ export default function AppliancesByMember({ appliances, members, userId, onAppl
                   </p>
                 </div>
               </div>
-              <div className="bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg font-semibold text-sm">
-                {data.totalKwh} kWh
-              </div>
+              <div className="bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg font-semibold text-sm">{data.totalKwh} kWh</div>
             </button>
 
-            {/* Expanded Content */}
             {isExpanded && data.appliances.length > 0 && (
               <div className="border-t border-gray-200 bg-white">
                 <div className="p-4 space-y-3">
@@ -96,7 +83,7 @@ export default function AppliancesByMember({ appliances, members, userId, onAppl
                       <div className="flex-1">
                         <p className="font-medium text-gray-900">{appliance.device_name}</p>
                         <p className="text-sm text-gray-600">
-                          {appliance.wattage}W × {appliance.daily_hours}h = {((appliance.wattage / 1000) * appliance.daily_hours).toFixed(2)} kWh
+                          {appliance.wattage}W x {appliance.daily_hours}h = {((appliance.wattage / 1000) * appliance.daily_hours).toFixed(2)} kWh
                         </p>
                       </div>
                       {data.isCurrentUser && (
@@ -114,17 +101,13 @@ export default function AppliancesByMember({ appliances, members, userId, onAppl
               </div>
             )}
 
-            {/* Empty State */}
             {isExpanded && data.appliances.length === 0 && (
-              <div className="p-4 bg-gray-50 text-center text-sm text-gray-500">
-                No appliances logged yet
-              </div>
+              <div className="p-4 bg-gray-50 text-center text-sm text-gray-500">No appliances logged yet</div>
             )}
           </div>
         );
       })}
 
-      {/* Delete Appliance Modal */}
       <DeleteApplianceModal
         isOpen={showDeleteModal}
         applianceName={selectedAppliance?.device_name || 'Device'}

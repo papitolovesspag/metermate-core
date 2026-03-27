@@ -41,6 +41,7 @@ export const initDB = async () => {
         target_amount DECIMAL(10, 2) NOT NULL,
         status VARCHAR(50) DEFAULT 'Funding',
         current_balance DECIMAL(10, 2) DEFAULT 0.00,
+        cycle_started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         last_active_session UUID,
         can_start_new_session BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -118,6 +119,27 @@ export const initDB = async () => {
         description TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- 9. Meter Notifications Table
+    CREATE TABLE IF NOT EXISTS meter_notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        group_id UUID REFERENCES meter_groups(id) ON DELETE CASCADE,
+        actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        event_type VARCHAR(60) NOT NULL,
+        message TEXT NOT NULL,
+        metadata JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_meter_notifications_group_created
+      ON meter_notifications (group_id, created_at DESC);
+
+    -- Ensure legacy databases get new cycle tracking column
+    ALTER TABLE meter_groups
+      ADD COLUMN IF NOT EXISTS cycle_started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+    UPDATE meter_groups
+      SET cycle_started_at = COALESCE(cycle_started_at, created_at, CURRENT_TIMESTAMP);
     `;
 
     await client.query(createTablesQuery);

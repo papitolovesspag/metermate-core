@@ -1,39 +1,29 @@
-# Run MeterMate Locally (Main Branch)
+# Run MeterMate Locally (Bash + Main Branch)
 
 ## Prerequisites
 
 - Node.js 22.x
-- PostgreSQL database (or Neon DB URL)
-- Python 3.10+ (for the calculation engine)
+- Python 3.14 or 3.12 (CPython)
+- PostgreSQL or Neon `DATABASE_URL`
 
-## 1) Fix PowerShell npm command issues (one-time)
+## 1) Install Node dependencies
 
-If `npm` is blocked in PowerShell, run:
-
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-```
-
-Or use `cmd /c npm ...` instead of `npm ...`.
-
-## 2) Install dependencies
-
-```powershell
+```bash
 cd backend
 npm install
 
-cd ..\metermate-frontend
+cd ../metermate-frontend
 npm install --include=dev
 ```
 
-## 3) Configure environment files
+## 2) Configure env files
 
-```powershell
-cd ..\backend
-copy .env.example .env
+```bash
+cd ../backend
+cp .env.example .env
 
-cd ..\metermate-frontend
-copy .env.example .env
+cd ../metermate-frontend
+cp .env.example .env
 ```
 
 Set in `backend/.env`:
@@ -46,39 +36,42 @@ Set in `metermate-frontend/.env`:
 
 - `VITE_API_BASE_URL=http://localhost:5000/api`
 
-## 4) Recreate Python virtual environment
+## 3) Create/recreate Python venv
 
-```powershell
-cd ..\python-engine
+```bash
+cd ../python-engine
 python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements.txt
+source .venv/Scripts/activate
+python -m pip install --upgrade pip setuptools wheel
+python -m pip install --prefer-binary -r requirements.txt
 ```
 
-## 5) Run the 3 services in 3 terminals
+## 4) Run all 3 services in separate terminals
 
 Terminal A:
 
-```powershell
+```bash
 cd python-engine
-.venv\Scripts\python.exe main.py
+source .venv/Scripts/activate
+python main.py
 ```
 
 Terminal B:
 
-```powershell
+```bash
 cd backend
 npm run dev:plain
 ```
 
 Terminal C:
 
-```powershell
+```bash
 cd metermate-frontend
 npm run dev
 ```
 
 ## Common crash fixes
 
-- `vite ... spawn EPERM`: use Node 22 and run `npm install --include=dev` in frontend.
-- `nodemon not recognized`: use `npm run dev:plain` or install backend dependencies.
-- `DATABASE_URL is missing`: set `backend/.env` correctly before starting backend.
+- `No matching distribution found for pydantic-core`: recreate venv, then run install with `--prefer-binary` as above.
+- `vite ... spawn EPERM`: fixed by native config loader; reinstall frontend deps if needed.
+- `DATABASE_URL is missing`: backend starts but DB init fails until env is set.

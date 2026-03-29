@@ -32,9 +32,12 @@ services:
     runtime: python
     name: metermate-python-engine
     plan: free
-    buildCommand: cd python-engine && pip install -r requirements.txt
-    startCommand: cd python-engine && uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: cd python-engine && python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+    startCommand: cd python-engine && python -m uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.8"
 
   - type: web
     runtime: static

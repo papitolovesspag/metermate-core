@@ -37,7 +37,8 @@ Make sure `render.yaml` is in the repo root.
 
 ### Python (`metermate-python-engine`)
 
-- No required env vars for basic startup.
+- `PYTHON_VERSION` is pinned to `3.12.8` via `render.yaml` and `python-engine/runtime.txt`.
+- No extra env vars are required for basic startup.
 
 ## 4) Verify after deploy
 

@@ -1,0 +1,55 @@
+services:
+  - type: web
+    runtime: node
+    name: metermate-backend
+    plan: free
+    buildCommand: cd backend && npm ci
+    startCommand: cd backend && npm run start
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: PYTHON_ENGINE_URL
+        sync: false
+      - key: INTERSWITCH_CLIENT_ID
+        sync: false
+      - key: INTERSWITCH_CLIENT_SECRET
+        sync: false
+      - key: INTERSWITCH_MERCHANT_CODE
+        sync: false
+      - key: INTERSWITCH_DEMO_MODE
+        value: "true"
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+
+  - type: web
+    runtime: python
+    name: metermate-python-engine
+    plan: free
+    buildCommand: cd python-engine && pip install -r requirements.txt
+    startCommand: cd python-engine && uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+
+  - type: web
+    runtime: static
+    name: metermate-frontend
+    plan: free
+    buildCommand: cd metermate-frontend && npm ci --include=dev && npm run build
+    staticPublishPath: metermate-frontend/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false
+      - key: VITE_INTERSWITCH_MERCHANT_CODE
+        sync: false
+      - key: VITE_INTERSWITCH_PAY_ITEM_ID
+        sync: false
+      - key: VITE_INTERSWITCH_MODE
+        value: TEST
+      - key: NODE_VERSION
+        value: "22"

@@ -51,5 +51,8 @@ if (process.env.ENABLE_DEBUG_ROUTES === 'true') {
 app.listen(PORT, async () => {
   console.log(`Server is running on port ${PORT}`);
   debugInterswitchConfig();
-  await initDB();
+  const dbInitialized = await initDB();
+  if (!dbInitialized) {
+    console.warn('API started, but database initialization failed. Check DATABASE_URL and database accessibility.');
+  }
 });

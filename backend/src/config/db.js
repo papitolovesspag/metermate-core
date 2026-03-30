@@ -5,10 +5,12 @@ const { Pool } = pg;
 
 const connectionString = process.env.DATABASE_URL;
 const isProduction = process.env.NODE_ENV === 'production';
+const isNeonConnection = /neon\.tech|neon\.build/i.test(connectionString || '');
+const shouldUseSSL = isProduction || isNeonConnection;
 
 export const pool = new Pool({
   connectionString,
-  ...(isProduction && {
+  ...(shouldUseSSL && {
     ssl: {
       rejectUnauthorized: false
     }

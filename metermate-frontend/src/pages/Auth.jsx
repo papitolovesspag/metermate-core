@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import api from '../services/api';
+import api, { getApiErrorMessage } from '../services/api';
 import styles from './Auth.module.css';
 
 export default function Auth() {
@@ -31,7 +31,7 @@ export default function Auth() {
       toast.success(response.data.message);
       navigate('/dashboard');
     } catch (error) {
-      toast.error(error.response?.data?.error || 'Something went wrong!');
+      toast.error(getApiErrorMessage(error));
     } finally {
       setLoading(false);
     }
